@@ -1,4 +1,4 @@
-const STORAGE_KEY = "fastingTrackerStateV3";
+const STORAGE_KEY = "fastingTrackerStateV4";
 const RING_CIRC = 2 * Math.PI * 80;
 
 const FAST_TYPES = [
@@ -24,6 +24,7 @@ const defaultState = {
 
 let state = loadState();
 let selectedFastTypeId = state.settings.defaultFastTypeId || FAST_TYPES[0].id;
+let pendingTypeId = null;
 let calendarMonth = startOfMonth(new Date());
 let selectedDayKey = formatDateKey(new Date());
 let tickHandle = null;
@@ -112,17 +113,8 @@ function initFastTypeChips() {
     btn.className = "whitespace-nowrap px-3 py-1.5 rounded-full border text-xs border-slate-700 text-slate-100 bg-slate-900/80";
     btn.textContent = type.label;
     btn.addEventListener("click", () => {
-      selectedFastTypeId = type.id;
-      state.settings.defaultFastTypeId = selectedFastTypeId;
-
-      if (state.activeFast) applyTypeToActiveFast(type.id);
-      saveState();
-
-      highlightSelectedFastType();
-      openFastTypeModal(type);
-
-      if (!state.activeFast) renderTimerMetaIdle();
-      updateTimer();
+      pendingTypeId = type.id;
+      openFastTypeModal(getTypeById(pendingTypeId));
     });
     container.appendChild(btn);
   });
@@ -131,8 +123,9 @@ function initFastTypeChips() {
 
 function highlightSelectedFastType() {
   const chips = document.querySelectorAll("#fast-type-chips button");
+  const current = state.activeFast ? state.activeFast.typeId : selectedFastTypeId;
   chips.forEach(chip => {
-    const isActive = chip.dataset.typeId === selectedFastTypeId;
+    const isActive = chip.dataset.typeId === current;
     if (isActive) {
       chip.classList.add("bg-brand-500", "text-slate-950", "border-brand-500");
       chip.classList.remove("bg-slate-900/80", "text-slate-100", "border-slate-700");
@@ -168,7 +161,26 @@ function openFastTypeModal(type) {
   $("fast-type-modal").classList.remove("hidden");
 }
 
-function closeFastTypeModal() { $("fast-type-modal").classList.add("hidden"); }
+function closeFastTypeModal() {
+  $("fast-type-modal").classList.add("hidden");
+  pendingTypeId = null;
+}
+
+function usePendingFastType() {
+  if (!pendingTypeId) { closeFastTypeModal(); return; }
+
+  selectedFastTypeId = pendingTypeId;
+  state.settings.defaultFastTypeId = selectedFastTypeId;
+
+  if (state.activeFast) applyTypeToActiveFast(selectedFastTypeId);
+  saveState();
+
+  closeFastTypeModal();
+  highlightSelectedFastType();
+  updateTimer();
+  if (!state.activeFast) renderTimerMetaIdle();
+  showToast("Fast type applied");
+}
 
 function initButtons() {
   $("start-fast-btn").addEventListener("click", startFast);
@@ -177,7 +189,7 @@ function initButtons() {
   $("alerts-btn").addEventListener("click", onAlertsButton);
 
   $("modal-close").addEventListener("click", closeFastTypeModal);
-  $("modal-use-type").addEventListener("click", closeFastTypeModal);
+  $("modal-use-type").addEventListener("click", usePendingFastType);
 
   $("toggle-end-alert").addEventListener("click", () => {
     state.settings.notifyOnEnd = !state.settings.notifyOnEnd;
@@ -315,6 +327,8 @@ function updateTimer() {
   const type = getActiveType();
   typePill.textContent = type ? (type.label + " fast") : "No fast selected";
 
+  highlightSelectedFastType();
+
   if (!state.activeFast) {
     status.textContent = "IDLE";
     header.textContent = "No active fast";
@@ -431,28 +445,11 @@ function renderAlertsPill() {
   const dot = $("alerts-dot");
   const label = $("alerts-label");
 
-  if (!("Notification" in window)) {
-    dot.className = "w-1.5 h-1.5 rounded-full bg-slate-600";
-    label.textContent = "Unavailable";
-    return;
-  }
-  if (Notification.permission === "denied") {
-    dot.className = "w-1.5 h-1.5 rounded-full bg-red-500";
-    label.textContent = "Blocked";
-    return;
-  }
-  if (Notification.permission === "default") {
-    dot.className = "w-1.5 h-1.5 rounded-full bg-slate-600";
-    label.textContent = "Enable alerts";
-    return;
-  }
-  if (state.settings.alertsEnabled) {
-    dot.className = "w-1.5 h-1.5 rounded-full bg-emerald-400";
-    label.textContent = "Alerts on";
-  } else {
-    dot.className = "w-1.5 h-1.5 rounded-full bg-slate-600";
-    label.textContent = "Alerts off";
-  }
+  if (!("Notification" in window)) { dot.className = "w-1.5 h-1.5 rounded-full bg-slate-600"; label.textContent = "Unavailable"; return; }
+  if (Notification.permission === "denied") { dot.className = "w-1.5 h-1.5 rounded-full bg-red-500"; label.textContent = "Blocked"; return; }
+  if (Notification.permission === "default") { dot.className = "w-1.5 h-1.5 rounded-full bg-slate-600"; label.textContent = "Enable alerts"; return; }
+  if (state.settings.alertsEnabled) { dot.className = "w-1.5 h-1.5 rounded-full bg-emerald-400"; label.textContent = "Alerts on"; }
+  else { dot.className = "w-1.5 h-1.5 rounded-full bg-slate-600"; label.textContent = "Alerts off"; }
 }
 
 async function sendNotification(title, body) {
@@ -578,6 +575,7 @@ function clearAllData() {
   if (!confirm("Clear all fasting history and active fast?")) return;
   state = clone(defaultState);
   selectedFastTypeId = state.settings.defaultFastTypeId;
+  pendingTypeId = null;
   saveState();
   renderAll();
   showToast("Cleared");
@@ -682,10 +680,7 @@ function renderDayDetails() {
 
   list.innerHTML = "";
 
-  if (!day) {
-    summary.textContent = "No fasts logged";
-    return;
-  }
+  if (!day) { summary.textContent = "No fasts logged"; return; }
 
   summary.textContent = `${day.entries.length} fast(s), ${day.totalHours.toFixed(1)} total hours`;
 
@@ -750,7 +745,6 @@ function renderRecentFasts() {
 }
 
 function renderAll() {
-  highlightSelectedFastType();
   renderSettings();
   updateTimer();
   renderCalendar();
