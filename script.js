@@ -2,11 +2,120 @@ const STORAGE_KEY = "fastingTrackerStateV5";
 const RING_CIRC = 2 * Math.PI * 80;
 
 const FAST_TYPES = [
-  { id: "16_8", label: "16:8", durationHours: 16, bullets: ["Classic daily schedule", "Supports insulin sensitivity", "Flexible eating window"] },
-  { id: "18_6", label: "18:6", durationHours: 18, bullets: ["Longer fat-burning window", "Deeper metabolic switch", "Appetite regulation support"] },
-  { id: "20_4", label: "20:4", durationHours: 20, bullets: ["Extended fasting period", "May enhance autophagy", "Requires nutrient-dense meals"] },
-  { id: "24", label: "24h", durationHours: 24, bullets: ["OMAD style", "Simplifies planning", "Break fast mindfully"] },
-  { id: "36", label: "36h", durationHours: 36, bullets: ["Occasional extended fast", "Hydration/electrolytes matter", "Break fast gently"] }
+  {
+    id: "8",
+    label: "8h",
+    durationHours: 8,
+    bullets: [
+      "1h after eating: Rest-and-digest mode is active while the stomach and pancreas secrete enzymes.",
+      "2h after eating: Glucose absorption peaks; insulin guides nutrients into muscle and liver glycogen.",
+      "4h after eating: Post-absorptive phase; gastric emptying is mostly complete and insulin is falling.",
+      "8h after eating: Lower insulin allows more fat release for fuel as the overnight fast settles in.",
+      "Timing varies with meal size, sleep, and activity."
+    ]
+  },
+  {
+    id: "12_12",
+    label: "12h",
+    durationHours: 12,
+    bullets: [
+      "1h after eating: Rest-and-digest signaling supports active digestion and nutrient breakdown.",
+      "2h after eating: Blood glucose is still rising; insulin helps store glucose as glycogen.",
+      "4h after eating: The gut starts its cleaning waves (migrating motor complex) as insulin drops.",
+      "8h after eating: Glycogen release keeps blood sugar steady while fat use begins to rise.",
+      "12h after eating: Fat oxidation increases; early ketones may appear for some people.",
+      "Timing varies with meal size, sleep, and activity."
+    ]
+  },
+  {
+    id: "14_10",
+    label: "14h",
+    durationHours: 14,
+    bullets: [
+      "1h after eating: Digestive enzymes and bile are active under parasympathetic control.",
+      "2h after eating: Nutrient absorption and insulin activity remain elevated.",
+      "4h after eating: Post-absorptive phase; the gut begins cleaning cycles between meals.",
+      "8h after eating: Insulin is lower; fat release for energy becomes more noticeable.",
+      "12h after eating: Fat oxidation increases as liver glycogen declines.",
+      "14h after eating: Low insulin supports more reliance on fat and stable morning energy.",
+      "Timing varies with meal size, sleep, and activity."
+    ]
+  },
+  {
+    id: "16_8",
+    label: "16:8",
+    durationHours: 16,
+    bullets: [
+      "1h after eating: Rest-and-digest is dominant while the stomach breaks down food.",
+      "2h after eating: Glucose uptake peaks; insulin promotes storage and replenishes glycogen.",
+      "4h after eating: Post-absorptive phase; the gut’s cleaning cycles can resume.",
+      "8h after eating: Lower insulin supports more fat release for fuel.",
+      "12h after eating: Fat oxidation increases and ketones may begin to rise modestly.",
+      "16h after eating: Liver glycogen is lower, supporting a deeper shift to fat-based fuel.",
+      "Timing varies with meal size, sleep, and activity."
+    ]
+  },
+  {
+    id: "18_6",
+    label: "18:6",
+    durationHours: 18,
+    bullets: [
+      "1h after eating: Digestive enzymes and bile release are active in rest-and-digest mode.",
+      "2h after eating: Glucose absorption is high; insulin supports storage in muscle and liver.",
+      "4h after eating: Post-absorptive phase; migrating motor complex activity may start.",
+      "8h after eating: Insulin is lower and fat use increases.",
+      "12h after eating: Fat oxidation rises; ketones may begin to climb modestly.",
+      "16h after eating: Liver glycogen is lower, supporting longer fat-based fueling.",
+      "18h after eating: Many feel steadier energy and reduced snacking cues.",
+      "Timing varies with meal size, sleep, and activity."
+    ]
+  },
+  {
+    id: "20_4",
+    label: "20:4",
+    durationHours: 20,
+    bullets: [
+      "1h after eating: Active digestion and enzyme secretion dominate.",
+      "2h after eating: Glucose absorption and insulin remain elevated.",
+      "4h after eating: Post-absorptive phase; gut motility shifts to cleaning cycles.",
+      "8h after eating: Lower insulin supports more fat release for energy.",
+      "12h after eating: Fat oxidation increases; ketone production can begin to rise.",
+      "16h after eating: Glycogen stores are reduced; fat-based fuel is more prominent.",
+      "20h after eating: Longer fasting window supports appetite discipline before refeed.",
+      "Timing varies with meal size, sleep, and activity."
+    ]
+  },
+  {
+    id: "24",
+    label: "24h",
+    durationHours: 24,
+    bullets: [
+      "1h after eating: Rest-and-digest remains active as the stomach processes food.",
+      "2h after eating: Nutrient absorption peaks; insulin supports storage.",
+      "4h after eating: Post-absorptive phase; gut cleaning cycles resume.",
+      "8h after eating: Insulin is lower; fat use continues to rise.",
+      "12h after eating: Fat oxidation and ketones increase modestly.",
+      "16h after eating: Liver glycogen is low; fat-based fueling is dominant.",
+      "24h after eating: Longer fasts emphasize hydration and a gentle refeed.",
+      "Timing varies with meal size, sleep, and activity."
+    ]
+  },
+  {
+    id: "36",
+    label: "36h",
+    durationHours: 36,
+    bullets: [
+      "1h after eating: Digestion is active and parasympathetic signaling is high.",
+      "2h after eating: Glucose absorption peaks; insulin guides storage.",
+      "4h after eating: Post-absorptive phase; gut cleaning cycles can resume.",
+      "8h after eating: Lower insulin supports more fat release.",
+      "12h after eating: Fat oxidation rises as glycogen declines.",
+      "16h after eating: Deeper reliance on fat-based fuel.",
+      "24h after eating: Hydration and electrolytes become more important.",
+      "36h after eating: Longer fasts should be broken gently with easy-to-digest foods.",
+      "Timing varies with meal size, sleep, and activity."
+    ]
+  }
 ];
 
 const defaultState = {
