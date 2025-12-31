@@ -276,17 +276,18 @@ async function normalizeNoteSnapshot(snap) {
   } else if (typeof data.text === "string") {
     text = data.text;
   }
+  const normalizedCreatedAt = typeof data.createdAt === "number" ? data.createdAt : 0;
   return {
     id: snap.id,
     text,
-    createdAt: typeof data.createdAt === "number" ? data.createdAt : 0,
+    createdAt: normalizedCreatedAt,
     updatedAt: typeof data.updatedAt === "number" ? data.updatedAt : 0,
     dateKey: typeof data.dateKey === "string" ? data.dateKey : "",
-    fastContext: normalizeFastContext(data.fastContext)
+    fastContext: normalizeFastContext(data.fastContext, normalizedCreatedAt)
   };
 }
 
-function normalizeFastContext(fastContext) {
+function normalizeFastContext(fastContext, createdAt) {
   if (!fastContext || typeof fastContext !== "object") {
     return buildInactiveFastContext();
   }
@@ -297,14 +298,22 @@ function normalizeFastContext(fastContext) {
   const wasActive = typeof fastContext.wasActive === "boolean"
     ? fastContext.wasActive
     : Boolean(fastContext.fastId || legacyTypeId || legacyTypeLabel);
+  const normalizedCreatedAt = typeof createdAt === "number" ? createdAt : null;
+  const startTimestamp = fastContext.startTimestamp ?? null;
+  const elapsedMsAtNote = typeof fastContext.elapsedMsAtNote === "number"
+    ? fastContext.elapsedMsAtNote
+    : (typeof startTimestamp === "number" && typeof normalizedCreatedAt === "number"
+      ? Math.max(0, normalizedCreatedAt - startTimestamp)
+      : null);
 
   return {
     wasActive,
     fastId: fastContext.fastId ?? null,
     fastTypeId: fastContext.fastTypeId ?? legacyTypeId,
     fastTypeLabel: fastContext.fastTypeLabel ?? legacyTypeLabel,
-    startTimestamp: fastContext.startTimestamp ?? null,
-    plannedDurationHours: fastContext.plannedDurationHours ?? legacyDuration
+    startTimestamp,
+    plannedDurationHours: fastContext.plannedDurationHours ?? legacyDuration,
+    elapsedMsAtNote
   };
 }
 
@@ -315,23 +324,32 @@ function buildInactiveFastContext() {
     fastTypeId: null,
     fastTypeLabel: null,
     startTimestamp: null,
-    plannedDurationHours: null
+    plannedDurationHours: null,
+    elapsedMsAtNote: null
   };
 }
 
-function buildFastContext() {
+function buildFastContextAt(timestampMs) {
   if (!state.activeFast) {
     return buildInactiveFastContext();
   }
   const type = getTypeById(state.activeFast.typeId);
+  const elapsedMsAtNote = typeof state.activeFast.startTimestamp === "number"
+    ? Math.max(0, (timestampMs ?? Date.now()) - state.activeFast.startTimestamp)
+    : null;
   return {
     wasActive: true,
     fastId: state.activeFast.id,
     fastTypeId: state.activeFast.typeId,
     fastTypeLabel: type?.label || null,
     startTimestamp: state.activeFast.startTimestamp,
-    plannedDurationHours: state.activeFast.plannedDurationHours
+    plannedDurationHours: state.activeFast.plannedDurationHours,
+    elapsedMsAtNote
   };
+}
+
+function buildFastContext() {
+  return buildFastContextAt(Date.now());
 }
 
 async function buildNotePayload({ text, dateKey, fastContext } = {}) {
@@ -342,7 +360,7 @@ async function buildNotePayload({ text, dateKey, fastContext } = {}) {
     createdAt,
     updatedAt: createdAt,
     dateKey: formatDateKey(new Date(createdAt)),
-    fastContext: fastContext ?? buildFastContext()
+    fastContext: fastContext ?? buildFastContextAt(createdAt)
   };
 }
 
@@ -352,7 +370,28 @@ async function buildNoteUpdatePayload({ text, dateKey, fastContext, createdAt } 
   };
   if (typeof text === "string") payload.payload = await encryptNotePayload(text.trim());
   if (typeof dateKey === "string") payload.dateKey = dateKey;
-  if (fastContext !== undefined) payload.fastContext = fastContext;
+  if (fastContext !== undefined) {
+    if (fastContext === null || typeof fastContext !== "object") {
+      payload.fastContext = fastContext;
+    } else {
+      const fields = [
+        ["wasActive", fastContext.wasActive],
+        ["fastId", fastContext.fastId],
+        ["fastTypeId", fastContext.fastTypeId],
+        ["fastTypeLabel", fastContext.fastTypeLabel],
+        ["startTimestamp", fastContext.startTimestamp],
+        ["plannedDurationHours", fastContext.plannedDurationHours]
+      ];
+      fields.forEach(([key, value]) => {
+        if (value !== undefined) {
+          payload[`fastContext.${key}`] = value;
+        }
+      });
+      if (Object.prototype.hasOwnProperty.call(fastContext, "elapsedMsAtNote")) {
+        payload["fastContext.elapsedMsAtNote"] = fastContext.elapsedMsAtNote ?? null;
+      }
+    }
+  }
   if (typeof createdAt === "number") payload.createdAt = createdAt;
   return payload;
 }
