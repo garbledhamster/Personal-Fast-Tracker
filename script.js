@@ -17,6 +17,10 @@ import {
 } from "https://www.gstatic.com/firebasejs/9.23.0/firebase-firestore.js";
 
 const ENCRYPTED_CACHE_KEY = "fastingTrackerEncryptedStateV1";
+const WRAPPED_KEY_STORAGE_KEY = "fastingTrackerWrappedKeyV1";
+const DEVICE_KEY_DB = "fastingTrackerCryptoKeys";
+const DEVICE_KEY_STORE = "keys";
+const DEVICE_KEY_ID = "device-wrap-key";
 const RING_CIRC = 2 * Math.PI * 80;
 const ENCRYPTION_VERSION = 1;
 const PBKDF2_ITERATIONS = 310000;
@@ -176,6 +180,7 @@ let cryptoKey = null;
 let keySalt = null;
 let pendingPassword = null;
 let needsUnlock = false;
+let authRememberChoice = null;
 
 let navHoldTimer = null;
 let navHoldShown = false;
@@ -210,6 +215,10 @@ function getStateDocRef(uid) {
   return doc(db, "users", uid, "fastingState", "state");
 }
 
+function getUserDocRef(uid) {
+  return doc(db, "users", uid);
+}
+
 function getEncryptedCache() {
   try {
     const raw = localStorage.getItem(ENCRYPTED_CACHE_KEY);
@@ -224,6 +233,118 @@ function setEncryptedCache(payload) {
   try {
     localStorage.setItem(ENCRYPTED_CACHE_KEY, JSON.stringify(payload));
   } catch {}
+}
+
+function getWrappedKeyStorage(uid) {
+  try {
+    const raw = localStorage.getItem(`${WRAPPED_KEY_STORAGE_KEY}:${uid}`);
+    if (!raw) return null;
+    return JSON.parse(raw);
+  } catch {
+    return null;
+  }
+}
+
+function setWrappedKeyStorage(uid, payload) {
+  try {
+    localStorage.setItem(`${WRAPPED_KEY_STORAGE_KEY}:${uid}`, JSON.stringify(payload));
+  } catch {}
+}
+
+function clearWrappedKeyStorage(uid) {
+  try {
+    localStorage.removeItem(`${WRAPPED_KEY_STORAGE_KEY}:${uid}`);
+  } catch {}
+}
+
+function openDeviceKeyDb() {
+  return new Promise((resolve, reject) => {
+    const req = indexedDB.open(DEVICE_KEY_DB, 1);
+    req.onupgradeneeded = () => {
+      req.result.createObjectStore(DEVICE_KEY_STORE);
+    };
+    req.onsuccess = () => resolve(req.result);
+    req.onerror = () => reject(req.error);
+  });
+}
+
+async function loadDeviceWrappingKey() {
+  try {
+    const db = await openDeviceKeyDb();
+    return await new Promise((resolve, reject) => {
+      const tx = db.transaction(DEVICE_KEY_STORE, "readonly");
+      const store = tx.objectStore(DEVICE_KEY_STORE);
+      const req = store.get(DEVICE_KEY_ID);
+      req.onsuccess = () => resolve(req.result || null);
+      req.onerror = () => reject(req.error);
+    });
+  } catch {
+    return null;
+  }
+}
+
+async function saveDeviceWrappingKey(key) {
+  try {
+    const db = await openDeviceKeyDb();
+    await new Promise((resolve, reject) => {
+      const tx = db.transaction(DEVICE_KEY_STORE, "readwrite");
+      const store = tx.objectStore(DEVICE_KEY_STORE);
+      const req = store.put(key, DEVICE_KEY_ID);
+      req.onsuccess = () => resolve();
+      req.onerror = () => reject(req.error);
+    });
+  } catch {}
+}
+
+async function getOrCreateDeviceWrappingKey() {
+  const existing = await loadDeviceWrappingKey();
+  if (existing) return existing;
+  const key = await crypto.subtle.generateKey(
+    { name: "AES-GCM", length: 256 },
+    false,
+    ["wrapKey", "unwrapKey"]
+  );
+  await saveDeviceWrappingKey(key);
+  return key;
+}
+
+async function wrapEncryptionKeyForDevice(uid) {
+  if (!cryptoKey) return;
+  const wrappingKey = await getOrCreateDeviceWrappingKey();
+  const iv = crypto.getRandomValues(new Uint8Array(12));
+  const wrapped = await crypto.subtle.wrapKey(
+    "raw",
+    cryptoKey,
+    wrappingKey,
+    { name: "AES-GCM", iv }
+  );
+  setWrappedKeyStorage(uid, {
+    version: ENCRYPTION_VERSION,
+    iv: encodeBase64(iv),
+    wrappedKey: encodeBase64(new Uint8Array(wrapped))
+  });
+}
+
+async function unwrapEncryptionKeyFromDevice(uid) {
+  const cached = getWrappedKeyStorage(uid);
+  if (!cached?.iv || !cached?.wrappedKey) return null;
+  const wrappingKey = await loadDeviceWrappingKey();
+  if (!wrappingKey) return null;
+  try {
+    const iv = decodeBase64(cached.iv);
+    const wrappedBytes = decodeBase64(cached.wrappedKey);
+    return await crypto.subtle.unwrapKey(
+      "raw",
+      wrappedBytes,
+      wrappingKey,
+      { name: "AES-GCM", iv },
+      { name: "AES-GCM", length: 256 },
+      true,
+      ["encrypt", "decrypt"]
+    );
+  } catch {
+    return null;
+  }
 }
 
 function mergeStateWithDefaults(parsed) {
@@ -252,7 +373,7 @@ async function deriveKeyFromPassword(password, saltBytes) {
     },
     keyMaterial,
     { name: "AES-GCM", length: 256 },
-    false,
+    true,
     ["encrypt", "decrypt"]
   );
 }
@@ -296,31 +417,73 @@ async function resolveEncryptedPayload(uid) {
   return getEncryptedCache();
 }
 
+async function resolveUserSalt(uid, payloadSalt) {
+  let storedSalt = null;
+  try {
+    const snap = await getDoc(getUserDocRef(uid));
+    storedSalt = snap.data()?.crypto?.salt || null;
+  } catch {}
+
+  if (!storedSalt && payloadSalt) {
+    storedSalt = payloadSalt;
+    try {
+      await setDoc(getUserDocRef(uid), { crypto: { salt: storedSalt } }, { merge: true });
+    } catch {}
+  }
+
+  if (!storedSalt) {
+    storedSalt = encodeBase64(crypto.getRandomValues(new Uint8Array(16)));
+    try {
+      await setDoc(getUserDocRef(uid), { crypto: { salt: storedSalt } }, { merge: true });
+    } catch {}
+  }
+
+  return decodeBase64(storedSalt);
+}
+
 async function loadState() {
   const user = auth.currentUser;
   if (!user) return clone(defaultState);
 
   const payload = await resolveEncryptedPayload(user.uid);
+  const saltBytes = await resolveUserSalt(user.uid, payload?.salt);
+  keySalt = saltBytes;
+
   if (!payload) {
-    if (!pendingPassword) throw new Error("missing-password");
-    keySalt = crypto.getRandomValues(new Uint8Array(16));
-    cryptoKey = await deriveKeyFromPassword(pendingPassword, keySalt);
-    pendingPassword = null;
+    if (!cryptoKey) {
+      if (pendingPassword) {
+        cryptoKey = await deriveKeyFromPassword(pendingPassword, keySalt);
+        pendingPassword = null;
+        if (authRememberChoice) await wrapEncryptionKeyForDevice(user.uid);
+      } else {
+        const cachedKey = await unwrapEncryptionKeyFromDevice(user.uid);
+        if (cachedKey) {
+          cryptoKey = cachedKey;
+        } else {
+          throw new Error("missing-password");
+        }
+      }
+    }
     return clone(defaultState);
   }
 
-  if (!payload.salt || !payload.iv || !payload.ciphertext) {
+  if (!payload.iv || !payload.ciphertext) {
     throw new Error("invalid-payload");
   }
 
-  const saltBytes = decodeBase64(payload.salt);
-  if (!keySalt) keySalt = saltBytes;
-
   if (!cryptoKey) {
-    if (!pendingPassword) throw new Error("missing-password");
-    keySalt = saltBytes;
-    cryptoKey = await deriveKeyFromPassword(pendingPassword, saltBytes);
-    pendingPassword = null;
+    if (pendingPassword) {
+      cryptoKey = await deriveKeyFromPassword(pendingPassword, keySalt);
+      pendingPassword = null;
+      if (authRememberChoice) await wrapEncryptionKeyForDevice(user.uid);
+    } else {
+      const cachedKey = await unwrapEncryptionKeyFromDevice(user.uid);
+      if (cachedKey) {
+        cryptoKey = cachedKey;
+      } else {
+        throw new Error("missing-password");
+      }
+    }
   }
 
   try {
@@ -376,6 +539,7 @@ function initAuthListener() {
       keySalt = null;
       pendingPassword = null;
       needsUnlock = false;
+      authRememberChoice = null;
     }
   });
 }
@@ -449,6 +613,10 @@ async function handleAuthSubmit(e) {
       await signInWithEmailAndPassword(auth, email, password);
     }
     pendingPassword = password;
+    authRememberChoice = remember;
+    if (auth.currentUser && !remember) {
+      clearWrappedKeyStorage(auth.currentUser.uid);
+    }
     if (needsUnlock && auth.currentUser) {
       try {
         await completeAuthFlow();
