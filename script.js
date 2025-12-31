@@ -14,7 +14,8 @@ import {
   getFirestore,
   doc,
   getDoc,
-  setDoc
+  setDoc,
+  onSnapshot
 } from "https://www.gstatic.com/firebasejs/9.23.0/firebase-firestore.js";
 
 const ENCRYPTED_CACHE_KEY = "fastingTrackerEncryptedStateV1";
@@ -181,6 +182,7 @@ let keySalt = null;
 let pendingPassword = null;
 let needsUnlock = false;
 let authRememberChoice = null;
+let stateUnsubscribe = null;
 
 let navHoldTimer = null;
 let navHoldShown = false;
@@ -217,6 +219,26 @@ function getStateDocRef(uid) {
 
 function getUserDocRef(uid) {
   return doc(db, "users", uid);
+}
+
+function stopStateListener() {
+  if (stateUnsubscribe) {
+    stateUnsubscribe();
+    stateUnsubscribe = null;
+  }
+}
+
+function startStateListener(uid) {
+  stopStateListener();
+  stateUnsubscribe = onSnapshot(getStateDocRef(uid), async snap => {
+    const payload = snap.data()?.payload;
+    if (!payload || !payload.iv || !payload.ciphertext || !cryptoKey) return;
+    try {
+      const decrypted = await decryptStatePayload(payload);
+      state = mergeStateWithDefaults(decrypted);
+      renderAll();
+    } catch {}
+  });
 }
 
 function getEncryptedCache() {
@@ -533,6 +555,7 @@ function initAuthListener() {
         showReauthPrompt("We couldn't load your encrypted data. Please sign in again.");
       }
     } else {
+      stopStateListener();
       setAuthVisibility(false);
       stopTick();
       cryptoKey = null;
@@ -636,6 +659,7 @@ async function handleAuthSubmit(e) {
 
 async function completeAuthFlow() {
   await loadAppState();
+  startStateListener(auth.currentUser.uid);
   if (!appInitialized) {
     initUI();
     startTick();
