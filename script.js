@@ -35,13 +35,12 @@ const NOTES_SCHEMA = Object.freeze({
   updatedAt: 0,
   dateKey: "YYYY-MM-DD",
   fastContext: {
+    wasActive: false,
     fastId: null,
-    typeId: null,
-    typeLabel: null,
+    fastTypeId: null,
+    fastTypeLabel: null,
     startTimestamp: null,
-    endTimestamp: null,
-    durationHours: null,
-    status: null
+    plannedDurationHours: null
   }
 });
 
@@ -270,32 +269,66 @@ function normalizeNoteSnapshot(snap) {
     createdAt: typeof data.createdAt === "number" ? data.createdAt : 0,
     updatedAt: typeof data.updatedAt === "number" ? data.updatedAt : 0,
     dateKey: typeof data.dateKey === "string" ? data.dateKey : "",
-    fastContext: data.fastContext || null
+    fastContext: normalizeFastContext(data.fastContext)
   };
 }
 
-function buildFastContextSnapshot() {
-  if (!state.activeFast) return null;
+function normalizeFastContext(fastContext) {
+  if (!fastContext || typeof fastContext !== "object") {
+    return buildInactiveFastContext();
+  }
+
+  const legacyTypeId = typeof fastContext.typeId === "string" ? fastContext.typeId : null;
+  const legacyTypeLabel = typeof fastContext.typeLabel === "string" ? fastContext.typeLabel : null;
+  const legacyDuration = typeof fastContext.durationHours === "number" ? fastContext.durationHours : null;
+  const wasActive = typeof fastContext.wasActive === "boolean"
+    ? fastContext.wasActive
+    : Boolean(fastContext.fastId || legacyTypeId || legacyTypeLabel);
+
+  return {
+    wasActive,
+    fastId: fastContext.fastId ?? null,
+    fastTypeId: fastContext.fastTypeId ?? legacyTypeId,
+    fastTypeLabel: fastContext.fastTypeLabel ?? legacyTypeLabel,
+    startTimestamp: fastContext.startTimestamp ?? null,
+    plannedDurationHours: fastContext.plannedDurationHours ?? legacyDuration
+  };
+}
+
+function buildInactiveFastContext() {
+  return {
+    wasActive: false,
+    fastId: null,
+    fastTypeId: null,
+    fastTypeLabel: null,
+    startTimestamp: null,
+    plannedDurationHours: null
+  };
+}
+
+function buildFastContext() {
+  if (!state.activeFast) {
+    return buildInactiveFastContext();
+  }
   const type = getTypeById(state.activeFast.typeId);
   return {
+    wasActive: true,
     fastId: state.activeFast.id,
-    typeId: state.activeFast.typeId,
-    typeLabel: type?.label || null,
+    fastTypeId: state.activeFast.typeId,
+    fastTypeLabel: type?.label || null,
     startTimestamp: state.activeFast.startTimestamp,
-    endTimestamp: state.activeFast.endTimestamp,
-    durationHours: state.activeFast.plannedDurationHours,
-    status: state.activeFast.status
+    plannedDurationHours: state.activeFast.plannedDurationHours
   };
 }
 
 function buildNotePayload({ text, dateKey, fastContext } = {}) {
-  const now = Date.now();
+  const createdAt = Date.now();
   return {
     text: (text || "").trim(),
-    createdAt: now,
-    updatedAt: now,
-    dateKey: dateKey || selectedDayKey || formatDateKey(new Date()),
-    fastContext: fastContext ?? buildFastContextSnapshot()
+    createdAt,
+    updatedAt: createdAt,
+    dateKey: formatDateKey(new Date(createdAt)),
+    fastContext: fastContext ?? buildFastContext()
   };
 }
 
@@ -343,8 +376,8 @@ function openNoteEditor(note = null) {
   const modal = $("note-editor-modal");
   if (!modal) return;
   editingNoteId = note?.id || null;
-  editingNoteDateKey = note?.dateKey || selectedDayKey || formatDateKey(new Date());
-  editingNoteContext = note?.fastContext ?? buildFastContextSnapshot();
+  editingNoteDateKey = note?.dateKey || formatDateKey(new Date());
+  editingNoteContext = note?.fastContext ?? buildFastContext();
   editingNoteCreatedAt = note?.createdAt ?? null;
   editingNoteTimestamp = note?.updatedAt || note?.createdAt || null;
 
@@ -366,11 +399,11 @@ function updateNoteEditorMeta() {
   const timeLabel = editingNoteTimestamp ? formatTimeShort(new Date(editingNoteTimestamp)) : "";
   dateEl.textContent = timeLabel ? `${dateLabel} • ${timeLabel}` : dateLabel;
 
-  if (editingNoteContext?.typeLabel) {
-    badge.textContent = `${editingNoteContext.typeLabel} fast`;
+  if (editingNoteContext?.wasActive && editingNoteContext?.fastTypeLabel) {
+    badge.textContent = `Active ${editingNoteContext.fastTypeLabel}`;
     badge.classList.remove("is-muted");
   } else {
-    badge.textContent = "No fast context";
+    badge.textContent = "No active fast";
     badge.classList.add("is-muted");
   }
 }
@@ -1700,10 +1733,10 @@ function buildNoteCard(note) {
 
   const badge = document.createElement("span");
   badge.className = "note-badge";
-  if (note.fastContext?.typeLabel) {
-    badge.textContent = `${note.fastContext.typeLabel} fast`;
+  if (note.fastContext?.wasActive && note.fastContext?.fastTypeLabel) {
+    badge.textContent = `Active ${note.fastContext.fastTypeLabel}`;
   } else {
-    badge.textContent = "No fast context";
+    badge.textContent = "No active fast";
     badge.classList.add("is-muted");
   }
 
@@ -1716,10 +1749,6 @@ function buildNoteCard(note) {
 }
 
 function getNoteTimestampLabel(note) {
-  const timestamp = note.updatedAt || note.createdAt;
-  if (timestamp) {
-    return formatDateTime(new Date(timestamp));
-  }
   const dateObj = parseDateKey(note.dateKey);
   if (dateObj) {
     return dateObj.toLocaleDateString(undefined, { month: "short", day: "numeric", year: "numeric" });
