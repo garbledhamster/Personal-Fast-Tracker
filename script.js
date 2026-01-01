@@ -2662,7 +2662,7 @@ function renderRecentFasts() {
   container.innerHTML = "";
   if (!state.history.length) {
     const p = document.createElement("p");
-    p.className = "text-slate-400 text-sm md:text-xs";
+    p.className = "text-muted text-sm md:text-xs";
     p.textContent = "No fasts logged yet.";
     container.appendChild(p);
     return;
@@ -2670,19 +2670,19 @@ function renderRecentFasts() {
 
   state.history.slice(0, 10).forEach(e => {
     const row = document.createElement("div");
-    row.className = "flex items-center justify-between bg-slate-900 rounded-xl px-3 py-3 md:py-2";
+    row.className = "flex items-center justify-between surface border border-default rounded-xl px-3 py-3 md:py-2";
 
     const left = document.createElement("div");
     left.className = "flex flex-col text-sm md:text-[11px]";
 
     const type = getTypeById(e.typeId);
     const title = document.createElement("div");
-    title.className = "text-slate-100";
+    title.className = "text-default";
     title.textContent = `${type ? type.label : "Custom"} • ${Number(e.durationHours).toFixed(1)}h`;
 
     const start = new Date(e.startTimestamp);
     const time = document.createElement("div");
-    time.className = "text-slate-400";
+    time.className = "text-muted";
     time.textContent = `${start.toLocaleDateString(undefined, { month: "short", day: "numeric" })} • ${formatTimeShort(start)}`;
 
     left.appendChild(title);
