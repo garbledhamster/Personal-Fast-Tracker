@@ -1044,7 +1044,13 @@ function initAuthUI() {
     }
   });
   signOutBtn.addEventListener("click", async () => {
-    try { await signOut(auth); } catch {}
+    try {
+      await signOut(auth);
+    } catch {}
+    setVerificationPanel({ visible: false });
+    setAuthFormDisabled(false);
+    $("auth-email").value = "";
+    $("auth-password").value = "";
   });
   updateAuthMode();
 }
