@@ -212,6 +212,23 @@
         </div>
 
         <div class="mt-4 space-y-3">
+          <h2 class="text-xs uppercase tracking-[0.2em] text-slate-500 mb-1">Theme</h2>
+          <label class="flex items-center justify-between text-sm md:text-xs">
+            <span class="text-slate-300">Accent color</span>
+            <input id="theme-accent-color" type="color" class="theme-color-input">
+          </label>
+          <label class="flex items-center justify-between text-sm md:text-xs">
+            <span class="text-slate-300">Accent color (strong)</span>
+            <input id="theme-accent-strong" type="color" class="theme-color-input">
+          </label>
+          <label class="flex items-center justify-between text-sm md:text-xs">
+            <span class="text-slate-300">Background color</span>
+            <input id="theme-background-color" type="color" class="theme-color-input">
+          </label>
+          <p class="text-xs md:text-[11px] text-slate-500">Colors sync across devices when you’re signed in.</p>
+        </div>
+
+        <div class="mt-4 space-y-3">
           <h2 class="text-xs uppercase tracking-[0.2em] text-slate-500 mb-1">Data</h2>
           <button id="export-data" class="w-full py-3 md:py-2.5 rounded-xl bg-slate-900 border border-slate-700 text-sm md:text-xs font-medium">Export history (CSV)</button>
           <button id="clear-data" class="w-full py-3 md:py-2.5 rounded-xl bg-red-600 text-slate-50 text-sm md:text-xs font-medium">Clear all data</button>
