@@ -222,6 +222,7 @@ let notesOverlayOpen = false;
 let notesPortal = null;
 let notesBackdrop = null;
 let bodyOverflowBeforeNotes = null;
+let notesSwipeHandlersAttached = false;
 
 document.addEventListener("DOMContentLoaded", () => {
   initAuthUI();
@@ -1081,6 +1082,43 @@ function ensureNotesOverlay() {
   drawer.addEventListener("mousedown", (e) => e.stopPropagation());
   drawer.addEventListener("touchstart", (e) => e.stopPropagation(), { passive: true });
   drawer.addEventListener("click", (e) => e.stopPropagation());
+
+  if (!notesSwipeHandlersAttached && navigator.maxTouchPoints > 0) {
+    notesSwipeHandlersAttached = true;
+    let swipeStartX = 0;
+    let swipeStartY = 0;
+    let swipeTracking = false;
+
+    drawer.addEventListener("touchstart", (e) => {
+      if (!notesOverlayOpen || !e.touches || e.touches.length !== 1) return;
+      const touch = e.touches[0];
+      swipeStartX = touch.clientX;
+      swipeStartY = touch.clientY;
+      swipeTracking = true;
+    }, { passive: true });
+
+    drawer.addEventListener("touchmove", (e) => {
+      if (!swipeTracking || !e.touches || e.touches.length !== 1) return;
+      const touch = e.touches[0];
+      const deltaX = touch.clientX - swipeStartX;
+      const deltaY = Math.abs(touch.clientY - swipeStartY);
+      if (deltaY > 60 && deltaY > Math.abs(deltaX)) {
+        swipeTracking = false;
+      }
+    }, { passive: true });
+
+    drawer.addEventListener("touchend", (e) => {
+      if (!swipeTracking || !notesOverlayOpen) return;
+      const touch = e.changedTouches && e.changedTouches[0];
+      if (!touch) return;
+      const deltaX = touch.clientX - swipeStartX;
+      const deltaY = Math.abs(touch.clientY - swipeStartY);
+      if (deltaX > 60 && deltaY < 40) {
+        closeNotesDrawer();
+      }
+      swipeTracking = false;
+    }, { passive: true });
+  }
 
   notesBackdrop.addEventListener("click", () => closeNotesDrawer());
   document.addEventListener("keydown", (e) => {
