@@ -87,40 +87,34 @@ body { -webkit-tap-highlight-color: transparent; }
   background: rgba(15, 23, 42, 0.5);
 }
 
-.note-editor-modal {
-  display: flex;
-  justify-content: flex-end;
-}
+/* =========================================================
+   OVERLAYS / DRAWERS
+   - Notes drawer sits above the app
+   - Note editor sits ABOVE the notes drawer
+   - Backdrop covers the entire viewport and is clickable
+   ========================================================= */
 
-.note-editor-panel {
-  position: relative;
-  z-index: 1;
-  width: min(100%, 420px);
-  height: 100%;
-  transform: translateX(100%);
-  transition: transform 0.25s ease;
-}
-
-.note-editor-backdrop {
-  opacity: 0;
-  transition: opacity 0.25s ease;
-}
-
-.note-editor-modal.is-open .note-editor-panel {
-  transform: translateX(0);
-}
-
-.note-editor-modal.is-open .note-editor-backdrop {
-  opacity: 1;
-}
-
+/* Notes drawer (overlay above Timer/History/Settings) */
 .notes-drawer {
   position: fixed;
   inset: 0;
   display: flex;
   justify-content: flex-end;
+  z-index: 10000;
 }
 
+/* Notes backdrop (click off target) */
+.notes-drawer-backdrop {
+  position: absolute;
+  inset: 0;
+  opacity: 0;
+  transition: opacity 0.25s ease;
+  background: rgba(2, 6, 23, 0.72);
+  backdrop-filter: blur(2px);
+  -webkit-backdrop-filter: blur(2px);
+}
+
+/* Notes panel */
 .notes-drawer-panel {
   position: relative;
   z-index: 1;
@@ -130,17 +124,48 @@ body { -webkit-tap-highlight-color: transparent; }
   transition: transform 0.25s ease;
 }
 
-.notes-drawer-backdrop {
+/* open state */
+.notes-drawer.is-open .notes-drawer-panel {
+  transform: translateX(0);
+}
+.notes-drawer.is-open .notes-drawer-backdrop {
+  opacity: 1;
+}
+
+/* Note editor (must be ABOVE the notes drawer) */
+.note-editor-modal {
+  position: fixed;
+  inset: 0;
+  display: flex;
+  justify-content: flex-end;
+  z-index: 12000;
+}
+
+/* Note editor backdrop */
+.note-editor-backdrop {
   position: absolute;
   inset: 0;
   opacity: 0;
   transition: opacity 0.25s ease;
+  background: rgba(2, 6, 23, 0.78);
+  backdrop-filter: blur(2px);
+  -webkit-backdrop-filter: blur(2px);
 }
 
-.notes-drawer.is-open .notes-drawer-panel {
+/* Note editor panel */
+.note-editor-panel {
+  position: relative;
+  z-index: 1;
+  width: min(100%, 420px);
+  height: 100%;
+  transform: translateX(100%);
+  transition: transform 0.25s ease;
+}
+
+/* open state */
+.note-editor-modal.is-open .note-editor-panel {
   transform: translateX(0);
 }
-
-.notes-drawer.is-open .notes-drawer-backdrop {
+.note-editor-modal.is-open .note-editor-backdrop {
   opacity: 1;
 }
