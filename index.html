@@ -62,7 +62,7 @@
   </div>
 
   <div id="app" class="flex flex-col min-h-screen hidden">
-    <header class="px-4 pt-4 pb-3 flex items-center justify-between">
+    <header class="px-4 pt-4 md:pt-16 pb-3 flex items-center justify-between">
       <div class="flex flex-col">
         <h1 class="text-xl md:text-lg font-semibold tracking-tight">Fast Track</h1>
         <p id="header-subtitle" class="text-sm md:text-xs text-slate-400">No active fast</p>
@@ -241,7 +241,7 @@
       </section>
     </main>
 
-    <nav class="fixed bottom-0 inset-x-0 border-t border-slate-800 bg-slate-950/95 backdrop-blur pb-[env(safe-area-inset-bottom)]">
+    <nav class="fixed bottom-0 md:bottom-auto md:top-0 inset-x-0 border-t md:border-t-0 md:border-b border-slate-800 bg-slate-950/95 backdrop-blur pb-[env(safe-area-inset-bottom)] md:pb-0 md:pt-[env(safe-area-inset-top)]">
       <div class="flex h-20 md:h-14">
         <button data-tab="timer" data-label="Timer" class="nav-btn flex-1 flex items-center justify-center text-slate-100 nav-btn-active">
           <div class="flex flex-col md:flex-row items-center justify-center gap-1 md:gap-2">
