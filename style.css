@@ -2,12 +2,23 @@
   --primary-color: #06b6d4;
   --secondary-color: #0891b2;
   --background-color: #020617;
+  --surface-color: #0f172a;
+  --surface-muted-color: #1e293b;
+  --border-color: #1e293b;
+  --border-muted-color: #334155;
+  --text-color: #f8fafc;
+  --text-muted-color: #94a3b8;
+  --text-subtle-color: #64748b;
+  --danger-color: #dc2626;
+  --danger-muted-color: #fca5a5;
+  --ring-track-color: #1e293b;
 }
 
 body {
   -webkit-tap-highlight-color: transparent;
   overflow-x: hidden;
   background-color: var(--background-color);
+  color: var(--text-color);
 }
 
 body.bg-slate-950 {
@@ -30,8 +41,8 @@ body.bg-slate-950 {
   width: 40px;
   height: 22px;
   border-radius: 999px;
-  border: 1px solid #1f2937;
-  background: #020617;
+  border: 1px solid var(--border-color);
+  background: var(--background-color);
   position: relative;
   padding: 0;
 }
@@ -44,11 +55,11 @@ body.bg-slate-950 {
   border-radius: 999px;
   top: 2px;
   left: 2px;
-  background: #475569;
+  background: var(--text-subtle-color);
   transition: transform 0.16s linear, background 0.16s linear;
 }
 
-.switch-btn.on::before { transform: translateX(16px); background: #0f172a; }
+.switch-btn.on::before { transform: translateX(16px); background: var(--surface-color); }
 
 .switch-btn.on {
   background: var(--primary-color);
@@ -61,8 +72,8 @@ body.bg-slate-950 {
 .note-card {
   width: 100%;
   text-align: left;
-  background: #0f172a;
-  border: 1px solid #1e293b;
+  background: var(--surface-color);
+  border: 1px solid var(--border-color);
   border-radius: 16px;
   padding: 12px;
   display: flex;
@@ -83,9 +94,9 @@ body.bg-slate-950 {
 }
 
 .note-badge.is-muted {
-  border-color: #334155;
-  background: rgba(30, 41, 59, 0.6);
-  color: #94a3b8;
+  border-color: var(--border-muted-color);
+  background: color-mix(in srgb, var(--surface-muted-color) 60%, transparent);
+  color: var(--text-muted-color);
 }
 
 .note-meta {
@@ -93,16 +104,16 @@ body.bg-slate-950 {
   flex-wrap: wrap;
   gap: 8px;
   align-items: center;
-  color: #94a3b8;
+  color: var(--text-muted-color);
   font-size: 12px;
 }
 
 .note-empty {
-  border: 1px dashed #1e293b;
+  border: 1px dashed var(--border-color);
   border-radius: 16px;
   padding: 16px;
   text-align: center;
-  background: rgba(15, 23, 42, 0.5);
+  background: color-mix(in srgb, var(--surface-color) 50%, transparent);
 }
 
 .ring-emoji-layer {
@@ -115,9 +126,9 @@ body.bg-slate-950 {
   width: 32px;
   height: 32px;
   border-radius: 999px;
-  border: 1px solid #1e293b;
-  background: rgba(15, 23, 42, 0.92);
-  color: #f8fafc;
+  border: 1px solid var(--border-color);
+  background: color-mix(in srgb, var(--surface-color) 92%, transparent);
+  color: var(--text-color);
   display: flex;
   align-items: center;
   justify-content: center;
@@ -142,8 +153,12 @@ body.bg-slate-950 {
 .ring-emoji-btn.is-selected {
   background: var(--primary-color);
   border-color: var(--primary-color);
-  color: #0f172a;
+  color: var(--surface-color);
   transform: translate(-50%, -50%) scale(1.12);
+}
+
+.progress-ring-track {
+  stroke: var(--ring-track-color);
 }
 
 #progress-ring {
@@ -185,8 +200,104 @@ body.bg-slate-950 {
   height: 2.5rem;
   padding: 0;
   border-radius: 0.75rem;
-  border: 1px solid #1e293b;
-  background: #0f172a;
+  border: 1px solid var(--border-color);
+  background: var(--surface-color);
+}
+
+.bg-app {
+  background-color: var(--background-color);
+}
+
+.surface {
+  background-color: var(--surface-color);
+}
+
+.surface-muted {
+  background-color: var(--surface-muted-color);
+}
+
+.surface-glass {
+  background-color: color-mix(in srgb, var(--surface-color) 80%, transparent);
+}
+
+.surface-soft {
+  background-color: color-mix(in srgb, var(--surface-color) 60%, transparent);
+}
+
+.surface-appbar {
+  background-color: color-mix(in srgb, var(--background-color) 95%, transparent);
+}
+
+.border-default {
+  border-color: var(--border-color);
+}
+
+.border-muted {
+  border-color: var(--border-muted-color);
+}
+
+.text-default {
+  color: var(--text-color);
+}
+
+.text-muted {
+  color: var(--text-muted-color);
+}
+
+.text-subtle {
+  color: var(--text-subtle-color);
+}
+
+.text-accent {
+  color: var(--primary-color);
+}
+
+.text-on-primary {
+  color: var(--background-color);
+}
+
+.text-danger-muted {
+  color: var(--danger-muted-color);
+}
+
+.text-danger {
+  color: var(--danger-color);
+}
+
+.button-primary {
+  background-color: var(--primary-color);
+  border-color: var(--primary-color);
+  color: var(--background-color);
+}
+
+.button-secondary {
+  background-color: var(--surface-muted-color);
+  border-color: var(--surface-muted-color);
+  color: var(--text-color);
+}
+
+.button-outline {
+  background-color: var(--surface-color);
+  border-color: var(--border-color);
+  color: var(--text-color);
+}
+
+.button-danger {
+  background-color: var(--danger-color);
+  border-color: var(--danger-color);
+  color: var(--text-color);
+}
+
+.bg-subtle {
+  background-color: var(--border-muted-color);
+}
+
+.decoration-muted {
+  text-decoration-color: var(--border-muted-color);
+}
+
+.pressable-surface:active {
+  background-color: color-mix(in srgb, var(--surface-color) 40%, transparent);
 }
 
 /* =========================================================
