@@ -44,5 +44,5 @@
     surfaceMutedColor: "#f1f5f9"
     borderColor: "#e2e8f0"
     textColor: "#000000"
-    textMutedColor: "#475569"
+    textMutedColor: "#000000"
     dangerColor: "#dc2626"
