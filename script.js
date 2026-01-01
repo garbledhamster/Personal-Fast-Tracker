@@ -487,7 +487,8 @@ const defaultState = {
   },
   activeFast: null,
   history: [],
-  reminders: { endNotified: false, lastHourlyAt: null }
+  reminders: { endNotified: false, lastHourlyAt: null },
+  milestoneTally: {}
 };
 
 const firebaseConfig = window.FIREBASE_CONFIG;
@@ -1088,6 +1089,12 @@ function mergeStateWithDefaults(parsed) {
   merged.activeFast = parsed.activeFast || null;
   merged.history = Array.isArray(parsed.history) ? parsed.history : [];
   merged.reminders = Object.assign(merged.reminders, parsed.reminders || {});
+  merged.milestoneTally = parsed?.milestoneTally && typeof parsed.milestoneTally === "object"
+    ? parsed.milestoneTally
+    : {};
+  if (merged.activeFast && !Array.isArray(merged.activeFast.milestonesHit)) {
+    merged.activeFast.milestonesHit = [];
+  }
   return merged;
 }
 
@@ -1851,7 +1858,8 @@ function startFast() {
     startTimestamp: now,
     plannedDurationHours: type.durationHours,
     endTimestamp: now + type.durationHours * 3600000,
-    status: "active"
+    status: "active",
+    milestonesHit: []
   };
   state.reminders = { endNotified: false, lastHourlyAt: null };
   selectedDayKey = formatDateKey(new Date(now));
@@ -2010,13 +2018,38 @@ function updateRingEmojiProgress(type) {
   const elapsedHours = state.activeFast
     ? Math.max(0, (Date.now() - state.activeFast.startTimestamp) / 3600000)
     : null;
+  const milestones = Array.isArray(type?.milestones) ? type.milestones : [];
+  const title = $("ring-emoji-title");
+  const detail = $("ring-emoji-detail");
+  let visibleCount = 0;
 
   layer.querySelectorAll(".ring-emoji-btn").forEach(btn => {
     const hour = Number(btn.dataset.hour);
     const isActive = elapsedHours !== null && elapsedHours >= hour;
+    const isVisible = elapsedHours === null || elapsedHours >= hour;
+    btn.hidden = !isVisible;
+    if (isVisible) visibleCount += 1;
     if (isActive) btn.classList.add("is-active");
     else btn.classList.remove("is-active");
   });
+
+  if (elapsedHours !== null && visibleCount === 0 && milestones.length) {
+    ringEmojiSelectionKey = null;
+    if (title && detail) {
+      title.textContent = "Milestones unlock as you fast";
+      detail.textContent = `First milestone at hour ${milestones[0].hour}.`;
+    }
+    return;
+  }
+
+  if (ringEmojiSelectionKey) {
+    const selectedButton = layer.querySelector(`[data-type-id="${type.id}"][data-hour="${ringEmojiSelectionKey.split("-")[1]}"]`);
+    if (!selectedButton || selectedButton.hidden) {
+      ringEmojiSelectionKey = null;
+      updateRingEmojiPanel(type, null);
+      updateRingEmojiSelectionStyles();
+    }
+  }
 }
 
 function updateTimer() {
@@ -2066,6 +2099,8 @@ function updateTimer() {
     return;
   }
 
+  trackMilestoneProgress(type);
+
   const af = state.activeFast;
   const now = Date.now();
   const start = af.startTimestamp;
@@ -2113,6 +2148,29 @@ function updateTimer() {
       sub.textContent = "Tap time to change view";
     }
   }
+}
+
+function trackMilestoneProgress(type) {
+  if (!state.activeFast || !type) return;
+  const milestones = Array.isArray(type.milestones) ? type.milestones : [];
+  if (!milestones.length) return;
+  if (!Array.isArray(state.activeFast.milestonesHit)) {
+    state.activeFast.milestonesHit = [];
+  }
+  if (!state.milestoneTally || typeof state.milestoneTally !== "object") {
+    state.milestoneTally = {};
+  }
+  const elapsedHours = Math.max(0, (Date.now() - state.activeFast.startTimestamp) / 3600000);
+  let updated = false;
+  milestones.forEach(milestone => {
+    if (elapsedHours < milestone.hour) return;
+    if (state.activeFast.milestonesHit.includes(milestone.hour)) return;
+    state.activeFast.milestonesHit.push(milestone.hour);
+    const key = String(milestone.hour);
+    state.milestoneTally[key] = (state.milestoneTally[key] || 0) + 1;
+    updated = true;
+  });
+  if (updated) void saveState();
 }
 
 function renderTimerMetaIdle() {
