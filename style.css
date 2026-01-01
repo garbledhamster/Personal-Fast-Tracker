@@ -113,3 +113,34 @@ body { -webkit-tap-highlight-color: transparent; }
 .note-editor-modal.is-open .note-editor-backdrop {
   opacity: 1;
 }
+
+.notes-drawer {
+  position: fixed;
+  inset: 0;
+  display: flex;
+  justify-content: flex-end;
+}
+
+.notes-drawer-panel {
+  position: relative;
+  z-index: 1;
+  width: min(100%, 420px);
+  height: 100%;
+  transform: translateX(100%);
+  transition: transform 0.25s ease;
+}
+
+.notes-drawer-backdrop {
+  position: absolute;
+  inset: 0;
+  opacity: 0;
+  transition: opacity 0.25s ease;
+}
+
+.notes-drawer.is-open .notes-drawer-panel {
+  transform: translateX(0);
+}
+
+.notes-drawer.is-open .notes-drawer-backdrop {
+  opacity: 1;
+}
