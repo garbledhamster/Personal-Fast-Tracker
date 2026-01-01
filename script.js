@@ -33,6 +33,7 @@ const NOTES_SCHEMA = Object.freeze({
   text: "",
   createdAt: 0,
   updatedAt: 0,
+  openedAt: 0,
   dateKey: "YYYY-MM-DD",
   fastContext: {
     wasActive: false,
@@ -208,7 +209,7 @@ let editingNoteId = null;
 let editingNoteDateKey = null;
 let editingNoteContext = null;
 let editingNoteCreatedAt = null;
-let editingNoteTimestamp = null;
+let editingNoteOpenedAt = null;
 
 let navHoldTimer = null;
 let navHoldShown = false;
@@ -283,6 +284,7 @@ async function normalizeNoteSnapshot(snap) {
     text,
     createdAt: normalizedCreatedAt,
     updatedAt: typeof data.updatedAt === "number" ? data.updatedAt : 0,
+    openedAt: typeof data.openedAt === "number" ? data.openedAt : 0,
     dateKey: typeof data.dateKey === "string" ? data.dateKey : "",
     fastContext: normalizeFastContext(data.fastContext, normalizedCreatedAt)
   };
@@ -360,16 +362,18 @@ async function buildNotePayload({ text, dateKey, fastContext } = {}) {
     payload,
     createdAt,
     updatedAt: createdAt,
+    openedAt: createdAt,
     dateKey: formatDateKey(new Date(createdAt)),
     fastContext: fastContext ?? buildFastContextAt(createdAt)
   };
 }
 
-async function buildNoteUpdatePayload({ text, dateKey, fastContext, createdAt } = {}) {
-  const payload = {
-    updatedAt: Date.now()
-  };
-  if (typeof text === "string") payload.payload = await encryptNotePayload(text.trim());
+async function buildNoteUpdatePayload({ text, dateKey, fastContext, createdAt, openedAt } = {}) {
+  const payload = {};
+  if (typeof text === "string") {
+    payload.payload = await encryptNotePayload(text.trim());
+    payload.updatedAt = Date.now();
+  }
   if (typeof dateKey === "string") payload.dateKey = dateKey;
   if (fastContext !== undefined) {
     if (fastContext === null || typeof fastContext !== "object") {
@@ -394,6 +398,7 @@ async function buildNoteUpdatePayload({ text, dateKey, fastContext, createdAt } 
     }
   }
   if (typeof createdAt === "number") payload.createdAt = createdAt;
+  if (typeof openedAt === "number") payload.openedAt = openedAt;
   return payload;
 }
 
@@ -409,10 +414,10 @@ async function createNote({ text, dateKey, fastContext } = {}) {
   }
 }
 
-async function updateNote(noteId, { text, dateKey, fastContext, createdAt } = {}) {
+async function updateNote(noteId, { text, dateKey, fastContext, createdAt, openedAt } = {}) {
   const user = auth.currentUser;
   if (!user || !noteId) return;
-  const payload = await buildNoteUpdatePayload({ text, dateKey, fastContext, createdAt });
+  const payload = await buildNoteUpdatePayload({ text, dateKey, fastContext, createdAt, openedAt });
   try {
     await setDoc(getNoteDocRef(user.uid, noteId), payload, { merge: true });
   } catch {}
@@ -437,7 +442,10 @@ function openNoteEditor(note = null) {
   editingNoteDateKey = note?.dateKey || formatDateKey(new Date());
   editingNoteContext = note?.fastContext ?? buildFastContext();
   editingNoteCreatedAt = note?.createdAt ?? null;
-  editingNoteTimestamp = note?.updatedAt || note?.createdAt || null;
+  editingNoteOpenedAt = Date.now();
+  if (editingNoteId) {
+    updateNote(editingNoteId, { openedAt: editingNoteOpenedAt });
+  }
 
   $("note-editor-content").value = note?.text || "";
   updateNoteEditorMeta();
@@ -449,14 +457,35 @@ function openNoteEditor(note = null) {
 function updateNoteEditorMeta() {
   const badge = $("note-editor-fast");
   const dateEl = $("note-editor-date");
-  if (!badge || !dateEl) return;
+  const openedEl = $("note-editor-opened");
+  if (!badge || !dateEl || !openedEl) return;
 
-  const dateObj = parseDateKey(editingNoteDateKey);
-  const dateLabel = dateObj
-    ? dateObj.toLocaleDateString(undefined, { month: "short", day: "numeric", year: "numeric" })
-    : "Unknown date";
-  const timeLabel = editingNoteTimestamp ? formatTimeShort(new Date(editingNoteTimestamp)) : "";
-  dateEl.textContent = timeLabel ? `${dateLabel} • ${timeLabel}` : dateLabel;
+  if (editingNoteCreatedAt) {
+    const createdDate = new Date(editingNoteCreatedAt);
+    const createdDateLabel = createdDate.toLocaleDateString(undefined, {
+      month: "short",
+      day: "numeric",
+      year: "numeric"
+    });
+    dateEl.textContent = `${createdDateLabel} • ${formatTimeShort(createdDate)}`;
+  } else {
+    dateEl.textContent = "Not saved yet";
+  }
+
+  if (editingNoteOpenedAt) {
+    const openedDate = new Date(editingNoteOpenedAt);
+    const openedDateLabel = openedDate.toLocaleDateString(undefined, {
+      month: "short",
+      day: "numeric",
+      year: "numeric"
+    });
+    const openedRecently = Math.abs(Date.now() - editingNoteOpenedAt) < 60000;
+    openedEl.textContent = openedRecently
+      ? "Opened just now"
+      : `Opened ${openedDateLabel} • ${formatTimeShort(openedDate)}`;
+  } else {
+    openedEl.textContent = "";
+  }
 
   const isActive = Boolean(editingNoteContext?.wasActive);
   const elapsedMsAtNote = editingNoteContext?.elapsedMsAtNote;
@@ -485,7 +514,7 @@ function closeNoteEditor() {
   editingNoteDateKey = null;
   editingNoteContext = null;
   editingNoteCreatedAt = null;
-  editingNoteTimestamp = null;
+  editingNoteOpenedAt = null;
 }
 
 async function saveNoteEditor() {
@@ -499,8 +528,7 @@ async function saveNoteEditor() {
       await updateNote(editingNoteId, {
         text,
         dateKey: editingNoteDateKey,
-        fastContext: editingNoteContext,
-        createdAt: editingNoteCreatedAt
+        fastContext: editingNoteContext
       });
     } else {
       await createNote({ text, dateKey: editingNoteDateKey, fastContext: editingNoteContext });
