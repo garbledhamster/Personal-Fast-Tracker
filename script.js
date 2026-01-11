@@ -71,6 +71,12 @@ let THEME_PRESETS = {
   [DEFAULT_THEME_ID]: { label: "Midnight", colors: { ...DEFAULT_THEME_COLORS } }
 };
 
+const CALORIE_VIEWS = [
+  { id: "total", label: "Total" },
+  { id: "consumed", label: "Consumed" },
+  { id: "left", label: "Left" }
+];
+
 const defaultState = {
   settings: {
     defaultFastTypeId: "16_8",
@@ -79,6 +85,11 @@ const defaultState = {
     alertsEnabled: false,
     showRingEmojis: true,
     timeDisplayMode: "elapsed",
+    calories: {
+      target: null,
+      consumed: 0,
+      view: "total"
+    },
     theme: {
       presetId: DEFAULT_THEME_ID,
       customColors: { ...DEFAULT_THEME_COLORS }
@@ -1157,6 +1168,7 @@ function initUI() {
   initTabs();
   initNavTooltips();
   initFastTypeChips();
+  initCalories();
   initButtons();
   initSettings();
   initCalendar();
@@ -1596,7 +1608,7 @@ function switchTab(tab) {
   currentTab = tab;
   if (tab !== "notes") lastNonNotesTab = tab;
 
-  ["timer", "history", "settings"].forEach(id => {
+  ["timer", "history", "calories", "settings"].forEach(id => {
     const section = $("tab-" + id);
     const btn = document.querySelector(`nav .nav-btn[data-tab="${id}"]`);
     const active = id === tab;
@@ -1614,7 +1626,10 @@ function switchTab(tab) {
     renderRecentFasts();
     renderNotes();
   }
+  if (tab === "calories") renderCalories();
   if (tab === "settings") renderSettings();
+
+  renderCalorieButton();
 }
 
 function initNavTooltips() {
@@ -1679,6 +1694,142 @@ function getTypeById(id) {
 function getActiveType() {
   if (state.activeFast?.typeId) return getTypeById(state.activeFast.typeId);
   return getTypeById(selectedFastTypeId);
+}
+
+function getCalorieSettings() {
+  if (!state.settings.calories || typeof state.settings.calories !== "object") {
+    state.settings.calories = { ...defaultState.settings.calories };
+  }
+  return state.settings.calories;
+}
+
+function parseCalorieValue(value) {
+  const trimmed = String(value ?? "").trim();
+  if (!trimmed) return null;
+  const num = Number(trimmed);
+  if (!Number.isFinite(num) || num < 0) return null;
+  return num;
+}
+
+function getCalorieTarget() {
+  const target = Number(getCalorieSettings().target);
+  return Number.isFinite(target) && target > 0 ? target : null;
+}
+
+function getCalorieConsumed() {
+  const consumed = Number(getCalorieSettings().consumed);
+  return Number.isFinite(consumed) && consumed > 0 ? consumed : 0;
+}
+
+function getCalorieView() {
+  const view = getCalorieSettings().view;
+  return CALORIE_VIEWS.some(v => v.id === view) ? view : "total";
+}
+
+function getCalorieRemaining() {
+  const target = getCalorieTarget();
+  if (!target) return null;
+  return Math.max(0, target - getCalorieConsumed());
+}
+
+function formatCalories(value) {
+  if (!Number.isFinite(value)) return "0";
+  return new Intl.NumberFormat().format(Math.round(value));
+}
+
+function renderCalorieViewButtons() {
+  const activeView = getCalorieView();
+  document.querySelectorAll("#calorie-view-buttons [data-calorie-view]").forEach(btn => {
+    const isActive = btn.dataset.calorieView === activeView;
+    btn.classList.toggle("calorie-view-chip--active", isActive);
+  });
+}
+
+function renderCalorieSummary() {
+  const summary = $("calorie-summary");
+  if (!summary) return;
+  const target = getCalorieTarget();
+  const consumed = getCalorieConsumed();
+  if (!target) {
+    summary.textContent = "Set a target to track remaining calories.";
+    return;
+  }
+  const remaining = Math.max(0, target - consumed);
+  summary.textContent = `${formatCalories(remaining)} calories left today.`;
+}
+
+function renderCalorieButton() {
+  const button = $("calorie-btn");
+  const label = $("calorie-label");
+  if (!button || !label) return;
+
+  const target = getCalorieTarget();
+  const remaining = getCalorieRemaining();
+  const view = getCalorieView();
+  const viewLabel = CALORIE_VIEWS.find(v => v.id === view)?.label ?? "Total";
+  const isMenuActive = currentTab === "calories";
+  const isMissingConfig = !target;
+
+  if (isMenuActive) {
+    label.textContent = viewLabel;
+  } else if (isMissingConfig) {
+    label.textContent = "Calories";
+  } else {
+    label.textContent = `${formatCalories(remaining)} left`;
+  }
+
+  button.classList.toggle("danger-glow", isMissingConfig);
+}
+
+function renderCalories() {
+  const targetInput = $("calorie-target-input");
+  const consumedInput = $("calorie-consumed-input");
+  if (targetInput) {
+    const target = getCalorieTarget();
+    targetInput.value = target ? String(Math.round(target)) : "";
+  }
+  if (consumedInput) {
+    const consumed = getCalorieConsumed();
+    consumedInput.value = consumed ? String(Math.round(consumed)) : "";
+  }
+  renderCalorieViewButtons();
+  renderCalorieSummary();
+  renderCalorieButton();
+}
+
+function initCalories() {
+  const targetInput = $("calorie-target-input");
+  const consumedInput = $("calorie-consumed-input");
+
+  if (targetInput) {
+    targetInput.addEventListener("input", (event) => {
+      const next = parseCalorieValue(event.target.value);
+      const settings = getCalorieSettings();
+      settings.target = next;
+      void saveState();
+      renderCalories();
+    });
+  }
+
+  if (consumedInput) {
+    consumedInput.addEventListener("input", (event) => {
+      const next = parseCalorieValue(event.target.value);
+      const settings = getCalorieSettings();
+      settings.consumed = next ?? 0;
+      void saveState();
+      renderCalories();
+    });
+  }
+
+  document.querySelectorAll("#calorie-view-buttons [data-calorie-view]").forEach(btn => {
+    btn.addEventListener("click", () => {
+      const next = btn.dataset.calorieView;
+      const settings = getCalorieSettings();
+      settings.view = next;
+      void saveState();
+      renderCalories();
+    });
+  });
 }
 
 function initFastTypeChips() {
@@ -1758,6 +1909,11 @@ function usePendingFastType() {
 function initButtons() {
   $("start-fast-btn").addEventListener("click", confirmStartFast);
   $("stop-fast-btn").addEventListener("click", confirmStopFast);
+
+  $("calorie-btn").addEventListener("click", () => {
+    if (notesOverlayOpen) closeNotesDrawer();
+    switchTab("calories");
+  });
 
   $("alerts-btn").addEventListener("click", onAlertsButton);
 
@@ -2933,6 +3089,7 @@ function renderAll() {
   renderDayDetails();
   renderNotes();
   renderRecentFasts();
+  renderCalories();
 }
 
 function resolveThemePresetId() {

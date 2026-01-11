@@ -325,6 +325,10 @@ body.bg-slate-950 {
   color: var(--text-color);
 }
 
+.danger-glow {
+  box-shadow: 0 0 0 2px color-mix(in srgb, var(--danger-color) 55%, transparent), 0 0 14px color-mix(in srgb, var(--danger-color) 55%, transparent);
+}
+
 .button-danger {
   background-color: var(--danger-color);
   border-color: var(--danger-color);
@@ -349,6 +353,21 @@ body.bg-slate-950 {
 }
 
 .fast-type-chip--active {
+  background: var(--primary-color);
+  border-color: var(--primary-color);
+  color: var(--background-color);
+}
+
+.calorie-view-chip {
+  border-radius: 999px;
+  border: 1px solid var(--border-color);
+  padding: 6px 14px;
+  background: color-mix(in srgb, var(--surface-color) 85%, transparent);
+  color: var(--text-color);
+  transition: background 0.16s ease, border-color 0.16s ease, color 0.16s ease;
+}
+
+.calorie-view-chip--active {
   background: var(--primary-color);
   border-color: var(--primary-color);
   color: var(--background-color);
