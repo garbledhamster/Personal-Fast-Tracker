@@ -119,6 +119,46 @@ body.bg-slate-950 {
   gap: 8px;
 }
 
+.note-calorie-entry {
+  display: flex;
+  gap: 12px;
+  align-items: flex-start;
+}
+
+.note-calorie-box {
+  min-width: 64px;
+  padding: 8px 10px;
+  border-radius: 14px;
+  border: 1px solid var(--border-color);
+  background: color-mix(in srgb, var(--secondary-color) 18%, transparent);
+  color: var(--text-color);
+  text-align: center;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+}
+
+.note-calorie-value {
+  font-size: 18px;
+  font-weight: 600;
+  line-height: 1;
+}
+
+.note-calorie-unit {
+  font-size: 11px;
+  text-transform: uppercase;
+  letter-spacing: 0.15em;
+  color: var(--text-muted-color);
+  margin-top: 4px;
+}
+
+.note-calorie-text {
+  color: var(--text-color);
+  white-space: pre-wrap;
+  font-size: 14px;
+}
+
 .note-badge {
   display: inline-flex;
   align-items: center;

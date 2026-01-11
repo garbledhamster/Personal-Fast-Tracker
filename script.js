@@ -54,6 +54,19 @@ const NOTES_SCHEMA = Object.freeze({
     fastTypeLabel: null,
     startTimestamp: null,
     plannedDurationHours: null
+  },
+  calorieEntry: {
+    calories: null,
+    foodNote: "",
+    goalSnapshot: {
+      dailyTarget: null,
+      goal: "",
+      age: null,
+      height: null,
+      bmi: null,
+      gender: "",
+      fitnessLevel: ""
+    }
   }
 });
 
@@ -154,6 +167,8 @@ let editingNoteContext = null;
 let editingNoteCreatedAt = null;
 let editingNoteOpenedAt = null;
 let editingNoteInitialText = "";
+let editingNoteInitialCalories = "";
+let editingNoteInitialFoodNote = "";
 let editingHistoryId = null;
 
 let navHoldTimer = null;
@@ -399,9 +414,16 @@ function stopNotesListener() {
 async function normalizeNoteSnapshot(snap) {
   const data = snap.data() || {};
   let text = "";
+  let calorieEntry = null;
   if (data?.payload?.iv && data?.payload?.ciphertext) {
     try {
-      text = await decryptNotePayload(data.payload);
+      const decrypted = await decryptNotePayload(data.payload);
+      if (typeof decrypted === "string") {
+        text = decrypted;
+      } else if (decrypted && typeof decrypted === "object") {
+        if (typeof decrypted.text === "string") text = decrypted.text;
+        calorieEntry = normalizeCalorieEntry(decrypted.calorieEntry);
+      }
     } catch (err) {
       if (err?.message === "missing-key") throw err;
       throw new Error("decrypt-failed");
@@ -409,6 +431,7 @@ async function normalizeNoteSnapshot(snap) {
   } else if (typeof data.text === "string") {
     text = data.text;
   }
+  if (!calorieEntry) calorieEntry = normalizeCalorieEntry(data.calorieEntry);
   const normalizedCreatedAt = typeof data.createdAt === "number" ? data.createdAt : 0;
   return {
     id: snap.id,
@@ -417,7 +440,8 @@ async function normalizeNoteSnapshot(snap) {
     updatedAt: typeof data.updatedAt === "number" ? data.updatedAt : 0,
     dateKey: typeof data.dateKey === "string" ? data.dateKey : "",
     goalContext: normalizeGoalContext(data.goalContext),
-    fastContext: normalizeFastContext(data.fastContext, normalizedCreatedAt)
+    fastContext: normalizeFastContext(data.fastContext, normalizedCreatedAt),
+    calorieEntry
   };
 }
 
@@ -449,6 +473,20 @@ function normalizeGoalContext(goalContext) {
     bmi: normalizeGoalMetric(goalContext.bmi),
     gender: typeof goalContext.gender === "string" ? goalContext.gender : "",
     fitnessLevel: typeof goalContext.fitnessLevel === "string" ? goalContext.fitnessLevel : ""
+  };
+}
+
+function normalizeCalorieEntry(entry) {
+  if (!entry || typeof entry !== "object") return null;
+  const calories = Number(entry.calories);
+  const normalizedCalories = Number.isFinite(calories) && calories >= 0 ? calories : null;
+  const foodNote = typeof entry.foodNote === "string" ? entry.foodNote : "";
+  const goalSnapshot = entry.goalSnapshot ? normalizeGoalContext(entry.goalSnapshot) : null;
+  if (normalizedCalories === null && !foodNote) return null;
+  return {
+    calories: normalizedCalories,
+    foodNote,
+    goalSnapshot
   };
 }
 
@@ -527,9 +565,12 @@ function buildGoalContext() {
   };
 }
 
-async function buildNotePayload({ text, dateKey, fastContext, goalContext } = {}) {
+async function buildNotePayload({ text, dateKey, fastContext, goalContext, calorieEntry } = {}) {
   const createdAt = Date.now();
-  const payload = await encryptNotePayload((text || "").trim());
+  const payload = await encryptNotePayload({
+    text: (text || "").trim(),
+    calorieEntry: calorieEntry ?? null
+  });
   return {
     payload,
     createdAt,
@@ -540,9 +581,14 @@ async function buildNotePayload({ text, dateKey, fastContext, goalContext } = {}
   };
 }
 
-async function buildNoteUpdatePayload({ text, dateKey, fastContext, createdAt, goalContext } = {}) {
+async function buildNoteUpdatePayload({ text, dateKey, fastContext, createdAt, goalContext, calorieEntry } = {}) {
   const payload = { updatedAt: Date.now() };
-  if (typeof text === "string") payload.payload = await encryptNotePayload(text.trim());
+  if (typeof text === "string" || calorieEntry !== undefined) {
+    payload.payload = await encryptNotePayload({
+      text: typeof text === "string" ? text.trim() : "",
+      calorieEntry: calorieEntry ?? null
+    });
+  }
   if (typeof dateKey === "string") payload.dateKey = dateKey;
   if (fastContext !== undefined) {
     if (fastContext === null || typeof fastContext !== "object") {
@@ -587,10 +633,10 @@ async function buildNoteUpdatePayload({ text, dateKey, fastContext, createdAt, g
   return payload;
 }
 
-async function createNote({ text, dateKey, fastContext } = {}) {
+async function createNote({ text, dateKey, fastContext, calorieEntry } = {}) {
   const user = auth.currentUser;
   if (!user) return null;
-  const payload = await buildNotePayload({ text, dateKey, fastContext });
+  const payload = await buildNotePayload({ text, dateKey, fastContext, calorieEntry });
   try {
     const docRef = await addDoc(getNotesCollectionRef(user.uid), payload);
     return docRef.id;
@@ -599,10 +645,10 @@ async function createNote({ text, dateKey, fastContext } = {}) {
   }
 }
 
-async function updateNote(noteId, { text, dateKey, fastContext, createdAt } = {}) {
+async function updateNote(noteId, { text, dateKey, fastContext, createdAt, calorieEntry } = {}) {
   const user = auth.currentUser;
   if (!user || !noteId) return;
-  const payload = await buildNoteUpdatePayload({ text, dateKey, fastContext, createdAt });
+  const payload = await buildNoteUpdatePayload({ text, dateKey, fastContext, createdAt, calorieEntry });
   try {
     await setDoc(getNoteDocRef(user.uid, noteId), payload, { merge: true });
   } catch {}
@@ -630,11 +676,35 @@ function openNoteEditor(note = null) {
   editingNoteOpenedAt = Date.now();
 
   $("note-editor-content").value = note?.text || "";
+  $("note-editor-calories").value = Number.isFinite(note?.calorieEntry?.calories)
+    ? note.calorieEntry.calories
+    : "";
+  $("note-editor-food-note").value = note?.calorieEntry?.foodNote || "";
   editingNoteInitialText = $("note-editor-content").value.trim();
+  editingNoteInitialCalories = $("note-editor-calories").value.trim();
+  editingNoteInitialFoodNote = $("note-editor-food-note").value.trim();
   updateNoteEditorMeta();
   $("note-editor-delete").classList.toggle("hidden", !editingNoteId);
   modal.classList.remove("hidden");
   requestAnimationFrame(() => modal.classList.add("is-open"));
+}
+
+function parseCalorieInput(value) {
+  if (value === "") return null;
+  const parsed = Number(value);
+  if (!Number.isFinite(parsed) || parsed < 0) return null;
+  return parsed;
+}
+
+function buildCalorieEntryFromEditor() {
+  const calories = parseCalorieInput($("note-editor-calories").value.trim());
+  const foodNote = $("note-editor-food-note").value.trim();
+  if (calories === null && !foodNote) return null;
+  return {
+    calories,
+    foodNote,
+    goalSnapshot: buildGoalContext()
+  };
 }
 
 function isTouchDevice() {
@@ -645,8 +715,13 @@ async function handleNoteEditorSwipeDismiss() {
   const modal = $("note-editor-modal");
   if (!modal || modal.classList.contains("hidden")) return;
   const text = $("note-editor-content").value.trim();
-  const hasChanges = text !== editingNoteInitialText;
-  if (hasChanges && text) {
+  const caloriesValue = $("note-editor-calories").value.trim();
+  const foodNoteValue = $("note-editor-food-note").value.trim();
+  const hasChanges = text !== editingNoteInitialText
+    || caloriesValue !== editingNoteInitialCalories
+    || foodNoteValue !== editingNoteInitialFoodNote;
+  const hasContent = Boolean(text) || Boolean(caloriesValue) || Boolean(foodNoteValue);
+  if (hasChanges && hasContent) {
     const saved = await persistNoteEditor({ closeOnSave: false });
     if (!saved) return;
   }
@@ -724,17 +799,22 @@ function closeNoteEditor() {
     modal.classList.add("hidden");
   }, 250);
   $("note-editor-content").value = "";
+  $("note-editor-calories").value = "";
+  $("note-editor-food-note").value = "";
   editingNoteId = null;
   editingNoteDateKey = null;
   editingNoteContext = null;
   editingNoteCreatedAt = null;
   editingNoteOpenedAt = null;
   editingNoteInitialText = "";
+  editingNoteInitialCalories = "";
+  editingNoteInitialFoodNote = "";
 }
 
 async function persistNoteEditor({ closeOnSave = true } = {}) {
   const text = $("note-editor-content").value.trim();
-  if (!text) {
+  const calorieEntry = buildCalorieEntryFromEditor();
+  if (!text && !calorieEntry) {
     showToast("Add a note before saving");
     return false;
   }
@@ -742,12 +822,18 @@ async function persistNoteEditor({ closeOnSave = true } = {}) {
     if (editingNoteId) {
       await updateNote(editingNoteId, {
         text,
+        calorieEntry,
         dateKey: editingNoteDateKey,
         fastContext: editingNoteContext,
         createdAt: editingNoteCreatedAt
       });
     } else {
-      await createNote({ text, dateKey: editingNoteDateKey, fastContext: editingNoteContext });
+      await createNote({
+        text,
+        calorieEntry,
+        dateKey: editingNoteDateKey,
+        fastContext: editingNoteContext
+      });
     }
   } catch (err) {
     if (err?.message === "missing-key") {
@@ -1108,10 +1194,19 @@ async function decryptStatePayload(payload) {
   return JSON.parse(decoded);
 }
 
-async function encryptNotePayload(text) {
+async function encryptNotePayload(notePayload) {
   if (!cryptoKey) throw new Error("missing-key");
   const iv = crypto.getRandomValues(new Uint8Array(12));
-  const encodedText = new TextEncoder().encode(text);
+  let serializedPayload = "";
+  if (typeof notePayload === "string") {
+    serializedPayload = notePayload;
+  } else if (notePayload && typeof notePayload === "object") {
+    serializedPayload = JSON.stringify({
+      text: typeof notePayload.text === "string" ? notePayload.text : "",
+      calorieEntry: notePayload.calorieEntry ?? null
+    });
+  }
+  const encodedText = new TextEncoder().encode(serializedPayload);
   const cipherBuffer = await crypto.subtle.encrypt(
     { name: "AES-GCM", iv },
     cryptoKey,
@@ -1134,7 +1229,14 @@ async function decryptNotePayload(payload) {
     cryptoKey,
     ciphertext
   );
-  return new TextDecoder().decode(decryptedBuffer);
+  const decoded = new TextDecoder().decode(decryptedBuffer);
+  try {
+    const parsed = JSON.parse(decoded);
+    if (parsed && typeof parsed === "object" && ("text" in parsed || "calorieEntry" in parsed)) {
+      return parsed;
+    }
+  } catch {}
+  return decoded;
 }
 
 function handleNotesDecryptError(err) {
@@ -3268,9 +3370,39 @@ function buildNoteCard(note) {
   card.className = "note-card";
   card.addEventListener("click", () => openNoteEditor(note));
 
-  const text = document.createElement("div");
-  text.className = "text-default whitespace-pre-wrap text-sm md:text-xs";
-  text.textContent = note.text || "Untitled note";
+  const hasCalorieEntry = Boolean(note.calorieEntry);
+  if (hasCalorieEntry) {
+    const entry = document.createElement("div");
+    entry.className = "note-calorie-entry";
+
+    const calorieBox = document.createElement("div");
+    calorieBox.className = "note-calorie-box";
+
+    const calorieValue = document.createElement("div");
+    calorieValue.className = "note-calorie-value";
+    const calories = note.calorieEntry?.calories;
+    calorieValue.textContent = Number.isFinite(calories) ? `${Math.round(calories)}` : "—";
+
+    const calorieUnit = document.createElement("div");
+    calorieUnit.className = "note-calorie-unit";
+    calorieUnit.textContent = "cal";
+
+    calorieBox.appendChild(calorieValue);
+    calorieBox.appendChild(calorieUnit);
+
+    const calorieText = document.createElement("div");
+    calorieText.className = "note-calorie-text";
+    calorieText.textContent = note.calorieEntry?.foodNote || note.text || "Calorie entry";
+
+    entry.appendChild(calorieBox);
+    entry.appendChild(calorieText);
+    card.appendChild(entry);
+  } else {
+    const text = document.createElement("div");
+    text.className = "text-default whitespace-pre-wrap text-sm md:text-xs";
+    text.textContent = note.text || "Untitled note";
+    card.appendChild(text);
+  }
 
   const meta = document.createElement("div");
   meta.className = "note-meta";
@@ -3295,7 +3427,6 @@ function buildNoteCard(note) {
   meta.appendChild(date);
   meta.appendChild(badge);
 
-  card.appendChild(text);
   card.appendChild(meta);
   return card;
 }
