@@ -1986,14 +1986,6 @@ function formatCalories(value) {
   return new Intl.NumberFormat().format(Math.round(value));
 }
 
-function renderCalorieViewButtons() {
-  const activeView = getCalorieView();
-  document.querySelectorAll("#calorie-view-buttons [data-calorie-view]").forEach(btn => {
-    const isActive = btn.dataset.calorieView === activeView;
-    btn.classList.toggle("calorie-view-chip--active", isActive);
-  });
-}
-
 function renderCalorieSummary() {
   const summary = $("calorie-summary");
   if (!summary) return;
@@ -2012,8 +2004,6 @@ function renderCalorieRing() {
   const valueEl = $("calorie-ring-value");
   const labelEl = $("calorie-ring-label");
   const detailEl = $("calorie-ring-detail");
-  const panelTitle = $("calorie-ring-panel-title");
-  const panelDetail = $("calorie-ring-panel-detail");
   if (!ring || !valueEl || !labelEl || !detailEl) return;
 
   ring.setAttribute("stroke-dasharray", String(RING_CIRC));
@@ -2028,14 +2018,11 @@ function renderCalorieRing() {
   let progress = 0;
   let labelText = viewLabel;
   let detailText = "Set a daily target to track progress.";
-  let panelTitleText = "Tap a view to focus the ring";
-  let panelDetailText = "";
 
   if (!target) {
     labelText = "No target set";
     value = 0;
     progress = 0;
-    panelTitleText = "Add a daily target to unlock progress tracking";
   } else {
     if (view === "total") {
       value = target;
@@ -2051,16 +2038,12 @@ function renderCalorieRing() {
       detailText = `${formatCalories(remaining ?? 0)} left of ${formatCalories(target)}.`;
     }
 
-    panelDetailText = `Target ${formatCalories(target)} · Consumed ${formatCalories(consumed)} · Left ${formatCalories(remaining ?? 0)}`;
   }
 
   valueEl.textContent = formatCalories(value);
   labelEl.textContent = labelText;
   detailEl.textContent = detailText;
   ring.setAttribute("stroke-dashoffset", String(RING_CIRC * (1 - progress)));
-
-  if (panelTitle) panelTitle.textContent = panelTitleText;
-  if (panelDetail) panelDetail.textContent = panelDetailText;
 
   renderCalorieTipOrbs();
 }
@@ -2251,7 +2234,6 @@ function renderCalories() {
     const bmi = normalizeGoalMetric(settings.bmi);
     bmiInput.value = bmi ? String(bmi) : "";
   }
-  renderCalorieViewButtons();
   renderCalorieSummary();
   renderCalorieRing();
   renderCalorieButton();
@@ -2266,6 +2248,7 @@ function initCalories() {
   const ageInput = $("calorie-age-input");
   const heightInput = $("calorie-height-input");
   const bmiInput = $("calorie-bmi-input");
+  const ringValue = $("calorie-ring-value");
 
   if (targetInput) {
     targetInput.addEventListener("input", (event) => {
@@ -2345,15 +2328,17 @@ function initCalories() {
     });
   }
 
-  document.querySelectorAll("#calorie-view-buttons [data-calorie-view]").forEach(btn => {
-    btn.addEventListener("click", () => {
-      const next = btn.dataset.calorieView;
+  if (ringValue) {
+    ringValue.addEventListener("click", () => {
+      const current = getCalorieView();
+      const index = CALORIE_VIEWS.findIndex(view => view.id === current);
+      const next = CALORIE_VIEWS[(index + 1) % CALORIE_VIEWS.length]?.id ?? "total";
       const settings = getCalorieSettings();
       settings.view = next;
       void saveState();
       renderCalories();
     });
-  });
+  }
 }
 
 function initFastTypeChips() {
