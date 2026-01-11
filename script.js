@@ -3595,6 +3595,9 @@ function formatDateTimeLong(date) {
 function renderNotes() {
   renderHistoryNotes();
   renderNotesTab();
+  renderCalorieSummary();
+  renderCalorieRing();
+  renderCalorieButton();
 }
 
 function renderHistoryNotes() {
